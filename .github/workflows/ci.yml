@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install CPU-only PyTorch (small wheel, no CUDA)
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest -q
+      - name: Evaluate the bundled checkpoints
+        run: glyph-vae eval && glyph-vae eval --ckpt checkpoints/vae_z2.pt
+      - name: Render all figures
+        run: glyph-vae plot --out-dir /tmp/figs
+      - name: Quick training smoke run
+        run: glyph-vae train --epochs 1 --n-train 2000 --latent-dim 4 --out /tmp/vae.pt && glyph-vae eval --ckpt /tmp/vae.pt
